@@ -65,7 +65,8 @@ def main():
     print("encoding with BGE-M3 (BAAI/bge-m3)...")
     model_name = "BAAI/bge-m3"
     tok = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModel.from_pretrained(model_name).to(device)
+    # Force safetensors to avoid torch.load vulnerability on torch < 2.6
+    model = AutoModel.from_pretrained(model_name, use_safetensors=True).to(device)
     model.eval()
     emb_dim = model.config.hidden_size
     print(f"BGE-M3: {sum(p.numel() for p in model.parameters()):,} params, dim={emb_dim}")
