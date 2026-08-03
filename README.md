@@ -42,7 +42,8 @@ msl_project/
 │   ├── 09_traducteur_fonctionne.md      # 100% faithful round-trip (synthetic)
 │   ├── 10-11_*.md                       # Real text: semantic capture + decoding
 │   ├── 12_h2_standard_adoptable.md      # H2 validated: MSL is adoptable
-│   └── 13_installation_a10.md           # Debian 13 + A10 deployment guide
+│   ├── 13_installation_a10.md           # Debian 13 + A10 deployment guide
+│   └── 14_plan_developpement.md          # Sequential plan: MiniLM → BGE-M3 → literal channel → scale
 ├── src/msl/                             # Source code
 │   ├── data/                            # MS-1 generator, datasets, corpus builder
 │   ├── models/                          # Encoder, quantizers (PQ/RVQ/FSQ), decoder, LLM
