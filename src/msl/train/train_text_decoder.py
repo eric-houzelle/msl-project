@@ -253,8 +253,11 @@ def main():
         print(f"  {s[:50]} -> {generated[0][:50]}")
 
     out_dir = Path("runs")
-    torch.save({"decoder": decoder.state_dict(), "config": {"d_z": 384, "n_prefix": 4}},
-               out_dir / "text_decoder_quant_0.pt")
+    torch.save({
+        "decoder": decoder.state_dict(),
+        "quantizer": quantizer.state_dict(),
+        "config": {"d_z": emb_dim, "n_prefix": 4, "n_codebooks": n_codebooks, "codebook_size": codebook_size},
+    }, out_dir / "text_decoder_quant_0.pt")
     print(f"\nsaved {out_dir / 'text_decoder_quant_0.pt'}")
 
 
