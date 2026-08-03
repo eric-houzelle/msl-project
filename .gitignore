@@ -45,7 +45,7 @@ runs/
 *.ckpt
 
 # Data
-data/
+/data/
 /tmp/
 
 # Brief (private, not pushed)
