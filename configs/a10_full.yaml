@@ -1,0 +1,40 @@
+# Config for A10 GPU (24 Go VRAM, CUDA)
+# Large-scale MSL decoder training with full GPT-2 fine-tuning
+
+name: a10_full
+output: runs
+
+# Dataset: 100k sentences from HuggingFace (Tatoeba + Wikipedia Simple)
+# Download with: python -u -m msl.data.download_hf --size 100000 --out runs/big_corpus.pt
+corpus: runs/big_corpus.pt
+
+# Decoder: GPT-2 small (124M) with ALL layers unfrozen
+# Quantizer: PQ 48 codebooks x 256 = 384 bits/sentence
+decoder:
+  d_z: 384
+  n_prefix: 4
+  gpt2_name: gpt2
+  # Unfreeze ALL of GPT-2 for full fine-tuning
+  freeze_gpt2: false
+
+# Quantizer: trained inline with decoder
+quantizer:
+  kind: pq
+  n_codebooks: 48
+  codebook_size: 256
+
+# Training
+train:
+  batch_size: 64        # A10 can handle batch 64 with GPT-2 small
+  steps: 20000          # 20k steps for convergence
+  warmup: 1000
+  lr: 3e-5             # Lower LR for full fine-tuning
+  weight_decay: 0.01
+  grad_clip: 1.0
+  log_every: 500
+  eval_every: 2000
+
+# Eval: round-trip on 20 held-out sentences
+eval:
+  n_samples: 20
+  max_gen_len: 50

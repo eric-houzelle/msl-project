@@ -1,0 +1,32 @@
+name: v2_p2_translate
+output: runs
+data:
+  min_k: 2
+  max_k: 32
+  tasks_per_state: 1
+  n_views: 2
+codec:
+  d_model: 256
+  n_layers: 6
+  n_heads: 8
+  d_z: 128
+  n_slots: 32
+  quantizer_kind: pq
+  n_codebooks: 16
+  codebook_size: 256
+  w_reconstruction: 2.0
+  w_task: 0.1
+  w_alignment: 0.2
+  w_commit: 1.0
+  w_entropy: 0.05
+  w_bits: 0.0001
+  dropout: 0.0
+  max_out_len: 96
+train:
+  dataset_size: 16384
+  batch_size: 32
+  steps: 10000
+  warmup: 300
+  lr: 0.0001
+  log_every: 500
+  cross_lang: true

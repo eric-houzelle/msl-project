@@ -1,0 +1,30 @@
+name: smoke
+output: runs
+
+data:
+  min_k: 2
+  max_k: 16
+  tasks_per_state: 1
+  n_views: 2
+
+codec:
+  d_model: 64
+  n_layers: 2
+  n_heads: 4
+  d_z: 32
+  n_slots: 2
+  quantizer_kind: fsq
+  n_codebooks: 4
+  levels: 5
+  w_reconstruction: 0.3
+  w_alignment: 0.2
+  w_bits: 0.0001
+  w_commit: 1.0
+
+train:
+  dataset_size: 2048
+  batch_size: 64
+  steps: 300
+  warmup: 50
+  lr: 0.001
+  log_every: 25

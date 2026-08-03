@@ -1,0 +1,30 @@
+name: mvp_n4
+output: runs
+data:
+  min_k: 2
+  max_k: 32
+  tasks_per_state: 1
+  n_views: 2
+codec:
+  d_model: 256
+  n_layers: 6
+  n_heads: 8
+  d_z: 64
+  n_slots: 4
+  quantizer_kind: pq
+  n_codebooks: 8
+  codebook_size: 1024
+  w_reconstruction: 0.3
+  w_alignment: 0.2
+  w_bits: 0.0001
+  w_commit: 1.0
+  dropout: 0.0
+train:
+  dataset_size: 16384
+  batch_size: 64
+  steps: 5000
+  warmup: 500
+  lr: 0.0003
+  log_every: 500
+  precompute: true
+  test_dataset_size: 1024
