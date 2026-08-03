@@ -161,8 +161,17 @@ def main():
     tok = GPT2Tokenizer.from_pretrained("gpt2")
     tok.pad_token = tok.eos_token
 
-    # Build decoder.
-    decoder = MSLDecoder(d_z=384, n_prefix=4).to(device)
+    # Detect embedding dim and quantizer config from corpus.
+    import torch as _torch
+    corpus_meta = _torch.load(args.corpus, weights_only=False, map_location="cpu")
+    emb_dim = corpus_meta.get("embeddings", _torch.zeros(1, 384)).shape[1]
+    n_codebooks = corpus_meta.get("n_codebooks", 48)
+    codebook_size = corpus_meta.get("codebook_size", 256)
+    del corpus_meta
+    print(f"corpus: emb_dim={emb_dim}, {n_codebooks} codebooks x {codebook_size}")
+
+    # Build decoder (adapts to embedding dim).
+    decoder = MSLDecoder(d_z=emb_dim, n_prefix=4).to(device)
     # Freeze GPT-2 except the last 2 layers (let them adapt to quantization noise).
     n_layers = len(decoder.gpt2.transformer.h)
     for i, block in enumerate(decoder.gpt2.transformer.h):
@@ -175,11 +184,10 @@ def main():
     print(f"decoder: GPT-2 last 2 layers + LM head + projection trainable: {n_trainable:,} params")
 
     # Build quantizer (trained inline with the decoder).
-
     from msl.models.quantizer import PQQuantizer
-    quantizer = PQQuantizer(384, 48, 256).to(device)
+    quantizer = PQQuantizer(emb_dim, n_codebooks, codebook_size).to(device)
     quantizer.train()
-    print("quantizer: 48 codebooks x 256 (384 bits)")
+    print(f"quantizer: {n_codebooks} codebooks x {codebook_size} ({n_codebooks*8} bits)")
 
     # Dataset.
     ds = TextDataset(args.corpus, tok, max_len=48)
