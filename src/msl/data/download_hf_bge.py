@@ -120,7 +120,20 @@ def main():
     print(f"packets: {all_packets.shape}")
     print(f"unique packets: {all_packets.unique(dim=0).shape[0]}")
 
-    # 5. Semantic resolution test.
+    # 5. Save corpus FIRST (before diagnostics, so we don't lose it on crash).
+    torch.save({
+        "sentences": sentences,
+        "embeddings": all_embeddings,
+        "packets": all_packets,
+        "n_codebooks": n_codebooks,
+        "codebook_size": codebook_size,
+        "encoder": model_name,
+        "emb_dim": emb_dim,
+    }, args.out)
+    print(f"saved {args.out} ({len(sentences)} sentences, "
+          f"{all_packets.shape[1]*8} bits/sentence)")
+
+    # 6. Semantic resolution test (diagnostic, after save).
     print("\n=== SEMANTIC RESOLUTION ===")
     emb = all_embeddings[:500]
     pkt = all_packets[:500]
@@ -145,19 +158,6 @@ def main():
         print(f'  Q: "{sentences[i][:60]}"')
         print(f'  NN: "{sentences[nn_idx][:60]}"')
         print(f'  dist={pkt_dist[i, nn_idx].item():.0f}/{n_codebooks}')
-
-    # 7. Save.
-    torch.save({
-        "sentences": sentences,
-        "embeddings": all_embeddings,
-        "packets": all_packets,
-        "n_codebooks": n_codebooks,
-        "codebook_size": codebook_size,
-        "encoder": model_name,
-        "emb_dim": emb_dim,
-    }, args.out)
-    print(f"\nsaved {args.out} ({len(sentences)} sentences, "
-          f"{all_packets.shape[1]*8} bits/sentence)")
 
 
 if __name__ == "__main__":
