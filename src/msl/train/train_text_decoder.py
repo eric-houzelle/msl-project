@@ -30,7 +30,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
-from msl.utils.seeding import seed_everything
+from msl.utils.seeding import default_device, seed_everything
 
 
 class MSLDecoder(nn.Module):
@@ -155,7 +155,7 @@ def main():
     args = ap.parse_args()
 
     seed_everything(args.seed)
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    device = default_device()
     print(f"device: {device}")
 
     tok = GPT2Tokenizer.from_pretrained("gpt2")
