@@ -30,7 +30,7 @@ def test_emergence():
     print("=" * 70)
 
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-    corpus = torch.load("runs/realtext_corpus.pt", weights_only=False)
+    corpus = torch.load("runs/big_corpus.pt", weights_only=False)
     embeddings = corpus["embeddings"][:2000].to(device)
     sentences = corpus["sentences"][:2000]
 
@@ -118,7 +118,7 @@ def test_adoption():
     print("=" * 70)
 
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-    corpus = torch.load("runs/realtext_corpus.pt", weights_only=False)
+    corpus = torch.load("runs/big_corpus.pt", weights_only=False)
     embeddings = corpus["embeddings"][:5000].to(device)
     sentences = corpus["sentences"][:5000]
 
