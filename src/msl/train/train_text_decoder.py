@@ -148,7 +148,7 @@ class TextDataset(Dataset):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--corpus", default="runs/realtext_corpus.pt")
+    ap.add_argument("--corpus", default="runs/big_corpus.pt")
     ap.add_argument("--steps", type=int, default=5000)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--lr", type=float, default=5e-5)
