@@ -109,6 +109,7 @@ def main():
 
     # 5. Build a text baseline LM (same size as MSL LM).
     gpt2_tok = GPT2Tokenizer.from_pretrained("gpt2")
+    gpt2_tok.pad_token = gpt2_tok.eos_token
     text_lm = TextBaselineLM(
         vocab_size=gpt2_tok.vocab_size, d_model=256, n_layers=6, n_heads=8, max_len=48,
     ).to(device)
