@@ -76,9 +76,20 @@ def main():
     emb_dim = dec_cfg.get("d_z", emb_dim)
 
     quantizer = PQQuantizer(emb_dim, n_codebooks, codebook_size).to(device)
-    quantizer.load_state_dict(dec_ckpt["quantizer"])
-    quantizer.eval()
-    print(f"quantizer loaded: {n_codebooks} codebooks x {codebook_size} ({n_codebooks*8} bits)")
+    if "quantizer" in dec_ckpt:
+        quantizer.load_state_dict(dec_ckpt["quantizer"])
+        print(f"quantizer loaded from checkpoint")
+    else:
+        print(f"quantizer not in checkpoint, retraining from corpus...")
+        quantizer.train()
+        import numpy as np
+        all_emb = corpus["embeddings"].to(device)
+        for step in range(1000):
+            idx = np.random.randint(0, len(all_emb), 256)
+            with torch.no_grad():
+                quantizer(all_emb[idx])
+        quantizer.eval()
+    print(f"quantizer: {n_codebooks} codebooks x {codebook_size} ({n_codebooks*8} bits)")
 
     # 3. Load native MSL LM.
     msl_lm_ckpt = torch.load("runs/native_lm_0.pt", map_location=device, weights_only=False)
