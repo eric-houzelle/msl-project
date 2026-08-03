@@ -140,7 +140,7 @@ def main():
     print("\n=== NEAREST NEIGHBOR EXAMPLES ===")
     pkt_dist = torch.cdist(pkt.float(), pkt.float(), p=1)
     pkt_dist.fill_diagonal_(float("inf"))
-    for i in [0, 1, 42, 500]:
+    for i in [0, 1, 42, 499]:
         nn_idx = int(pkt_dist[i].argmin().item())
         print(f'  Q: "{sentences[i][:60]}"')
         print(f'  NN: "{sentences[nn_idx][:60]}"')
