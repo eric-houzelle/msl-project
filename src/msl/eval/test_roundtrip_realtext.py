@@ -15,36 +15,47 @@ from transformers import AutoModel, AutoTokenizer, GPT2Tokenizer
 
 from msl.models.quantizer import PQQuantizer
 from msl.train.train_text_decoder import MSLDecoder
-from msl.utils.seeding import seed_everything
+from msl.utils.seeding import default_device, seed_everything
 
 
 def main():
     seed_everything(42)
-    device = torch.device("cuda" if torch.cuda.is_available() else
-                          "mps" if torch.backends.mps.is_available() else "cpu")
+    device = default_device()
     print(f"device: {device}")
 
-    # Load decoder.
+    # Load decoder + quantizer from checkpoint.
     dec_ckpt = torch.load("runs/text_decoder_quant_0.pt", weights_only=False)
-    decoder = MSLDecoder(d_z=384, n_prefix=4).to(device)
+    dec_cfg = dec_ckpt["config"]
+    emb_dim = dec_cfg.get("d_z", 384)
+    n_codebooks = dec_cfg.get("n_codebooks", 48)
+    codebook_size = dec_cfg.get("codebook_size", 256)
+
+    decoder = MSLDecoder(d_z=emb_dim, n_prefix=4).to(device)
     decoder.load_state_dict(dec_ckpt["decoder"])
     decoder.eval()
+
+    # Load the TRAINED quantizer from checkpoint (not retrain a new one).
+    quantizer = PQQuantizer(emb_dim, n_codebooks, codebook_size).to(device)
+    if "quantizer" in dec_ckpt:
+        quantizer.load_state_dict(dec_ckpt["quantizer"])
+        print("quantizer loaded from checkpoint")
+    else:
+        print("WARNING: quantizer not in checkpoint, retraining...")
+        corpus_tmp = torch.load("runs/big_corpus.pt", weights_only=False)
+        emb_tmp = corpus_tmp["embeddings"].to(device)
+        quantizer.train()
+        import numpy as np
+        for _ in range(1000):
+            idx = np.random.randint(0, len(emb_tmp), 256)
+            with torch.no_grad():
+                quantizer(emb_tmp[idx])
+        quantizer.eval()
+    quantizer.eval()
 
     # Load corpus.
     corpus = torch.load("runs/big_corpus.pt", weights_only=False)
     sentences = corpus["sentences"]
     embeddings = corpus["embeddings"].to(device)
-
-    # Build quantizer (must match training).
-    quantizer = PQQuantizer(384, 48, 256).to(device)
-    quantizer.eval()
-    quantizer.train()
-    import numpy as np
-    for _ in range(1000):
-        idx = np.random.randint(0, len(embeddings), 256)
-        with torch.no_grad():
-            quantizer(embeddings[idx])
-    quantizer.eval()
 
     # Load MiniLM for semantic similarity.
     tok_enc = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
@@ -59,7 +70,7 @@ def main():
             mask = inp["attention_mask"].unsqueeze(-1).float()
             return (out.last_hidden_state * mask).sum(1) / mask.sum(1)
 
-    # Test on last 20 sentences (unseen during training if we split).
+    # Test on HELD-OUT sentences (last 20, not used during training).
     test_sentences = sentences[-20:]
     test_embeddings = embeddings[-20:]
 

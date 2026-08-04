@@ -87,48 +87,50 @@ class _EMACodebook(nn.Module):
     cluster_size: torch.Tensor
     embed_avg: torch.Tensor
     usage: torch.Tensor
+    steps_since_use: torch.Tensor
 
     def __init__(self, dim: int, n_codes: int, decay: float = 0.99,
-                 restart_threshold: float = 1.0) -> None:
+                 restart_threshold: float = 100.0) -> None:
         super().__init__()
         self.dim = dim
         self.n_codes = n_codes
         self.decay = decay
-        self.restart_threshold = restart_threshold  # EMA usage below this = dead
+        self.restart_threshold = restart_threshold  # restart after N steps without use
         self.register_buffer("embed", torch.randn(n_codes, dim) * 0.02)
         self.register_buffer("cluster_size", torch.zeros(n_codes))
         self.register_buffer("embed_avg", self.embed.clone())
         self.register_buffer("usage", torch.zeros(n_codes))
+        self.register_buffer("steps_since_use", torch.zeros(n_codes))
 
     @torch.no_grad()
     def _ema_update(self, onehot: torch.Tensor, flat_z: torch.Tensor) -> None:
-        # onehot: (M, n_codes), flat_z: (M, dim)
-        counts = onehot.sum(0)                          # (n_codes,)
-        sums = onehot.T @ flat_z                        # (n_codes, dim)
+        counts = onehot.sum(0)
+        sums = onehot.T @ flat_z
         self.cluster_size.mul_(self.decay).add_(counts, alpha=1 - self.decay)
         self.embed_avg.mul_(self.decay).add_(sums, alpha=1 - self.decay)
         n = self.cluster_size.sum()
         smoothed = (self.cluster_size + 1e-5) / (n + self.n_codes * 1e-5) * n
         self.embed.copy_(self.embed_avg / smoothed.unsqueeze(1).clamp(min=1e-5))
-        # Track usage for dead code detection.
-        self.usage.mul_(0.99).add_(counts.clamp(max=1.0), alpha=0.01)
+        # Track steps since last use for dead code detection.
+        used = counts > 0
+        self.steps_since_use.add_(1.0)
+        self.steps_since_use[used] = 0.0
 
     @torch.no_grad()
     def restart_dead(self, flat_z: torch.Tensor) -> int:
-        """Replace dead codes with random samples from the batch. Returns n restarted."""
+        """Replace dead codes (unused for restart_threshold steps) with batch samples."""
         if flat_z.shape[0] == 0:
             return 0
-        dead = self.usage < self.restart_threshold
+        dead = self.steps_since_use >= self.restart_threshold
         n_dead: int = int(dead.sum().item())
         if n_dead == 0:
             return 0
-        # Sample replacement vectors from the batch.
         rand_idx = torch.randint(0, flat_z.shape[0], (n_dead,), device=flat_z.device)
         replacements = flat_z[rand_idx]
         self.embed[dead] = replacements
         self.embed_avg[dead] = replacements
         self.cluster_size[dead] = float(self.cluster_size.mean().item())
-        self.usage[dead] = self.restart_threshold  # give them a chance
+        self.steps_since_use[dead] = 0.0
         return n_dead
 
     def nearest(self, flat_z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:

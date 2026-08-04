@@ -23,9 +23,16 @@ from msl.utils.seeding import default_device, seed_everything
 class PacketSequenceDataset(Dataset):
     """Treats each state's 16 packets as a sequence to predict autoregressively."""
 
-    def __init__(self, corpus: dict, split: str = "train") -> None:
+    def __init__(self, corpus: dict, split: str = "train",
+                 train_ratio: float = 0.8) -> None:
         codes = corpus["codes"]  # (N, n_slots, n_codebooks)
-        self.codes = codes.long()
+        codes = codes.long()
+        n_total = len(codes)
+        n_train = int(n_total * train_ratio)
+        if split == "train":
+            self.codes = codes[:n_train]
+        else:
+            self.codes = codes[n_train:]
         self.n = len(self.codes)
 
     def __len__(self) -> int:
@@ -78,9 +85,11 @@ def main() -> None:
     n_slots = corpus["n_slots"]
     print(f"corpus: {corpus['codes'].shape}, {n_codebooks} codebooks, size {codebook_size}, {n_slots} slots")
 
-    ds = PacketSequenceDataset(corpus)
+    ds = PacketSequenceDataset(corpus, split="train")
     loader = DataLoader(ds, batch_size=64, shuffle=True, collate_fn=collate_packets, num_workers=0)
-    test_loader = DataLoader(ds, batch_size=64, shuffle=False, collate_fn=collate_packets, num_workers=0)
+    test_ds = PacketSequenceDataset(corpus, split="test")
+    test_loader = DataLoader(test_ds, batch_size=64, shuffle=False, collate_fn=collate_packets, num_workers=0)
+    print(f"train: {len(ds)} sequences, test: {len(test_ds)} sequences")
 
     model = NativeMSLLM(
         n_codebooks=n_codebooks, codebook_size=codebook_size,
@@ -132,14 +141,29 @@ def main() -> None:
                 running_loss, running_acc, running_n = 0.0, 0.0, 0
     print(f"done in {time.time()-t0:.1f}s")
 
+    # Evaluate on HELD-OUT test set.
     metrics = evaluate_lm(model, test_loader, device, n_batches=20)
-    print(f"eval: {metrics}")
+    print(f"eval[test]: {metrics}")
+
+    # Trivial baseline: predict the most common code for each codebook.
+    print("\n=== TRIVIAL BASELINE (most common code per codebook) ===")
+    all_codes = ds.codes  # (N_train, seq_len, n_codebooks)
+    # Most common code per codebook.
+    flat = all_codes.reshape(-1, n_codebooks)  # (N*seq, n_codebooks)
+    majority = flat.mode(dim=0).values  # (n_codebooks,)
+    # Baseline accuracy: how often the majority code is correct.
+    test_codes = test_ds.codes  # (N_test, seq_len, n_codebooks)
+    test_flat = test_codes.reshape(-1, n_codebooks)
+    baseline_acc = (test_flat == majority).float().mean().item()
+    print(f"  Baseline code accuracy: {baseline_acc:.3f}")
+    print(f"  MSL LLM code accuracy:  {metrics['per_code_acc']:.3f}")
+    print(f"  Lift over baseline:     {metrics['per_code_acc'] - baseline_acc:+.3f}")
 
     out_dir = Path("runs")
     out_dir.mkdir(parents=True, exist_ok=True)
     ckpt = out_dir / "native_lm_0.pt"
     torch.save({"model": model.state_dict(), "n_params": n_params, "metrics": metrics,
-                "corpus_path": args.corpus}, ckpt)
+                "baseline_acc": baseline_acc, "corpus_path": args.corpus}, ckpt)
     print(f"saved {ckpt}")
 
 

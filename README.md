@@ -1,6 +1,6 @@
 # MSL — Machine Semantic Language
 
-A learned, language-agnostic semantic codec that compresses meaning into discrete packets. Trained jointly with a decoder, it enables LLMs to think in MSL natively — 6× faster inference, 10% less memory, with faithful round-trip on real text.
+A learned, language-agnostic semantic codec that compresses meaning into discrete packets. Trained jointly with a decoder, it enables LLMs to think in MSL natively — 3.7× faster inference (real text), 17% less memory, with 2/5 faithful paraphrases under quantization.
 
 ## What is MSL?
 
@@ -8,13 +8,15 @@ MSL (Machine Semantic Language) is a research project to learn a bidirectional t
 
 Instead of tokenizing text into words, MSL compresses the *meaning* of a sentence into a short sequence of discrete codes (packets). A Transformer trained only on these packets can think, remember, and communicate without ever seeing human text.
 
-## Key results (validated on prototype)
+## Key results (prototype, 50k Tatoeba sentences, A10 GPU)
 
-| Hypothesis | Question | Result | Status |
+| Hypothesis | Question | Result | Caveats |
 |---|---|---|---|
-| H1 | Do packets carry meaning? | Gap +16 (synthetic), 4/5 faithful paraphrases (real text) | Validated |
-| H2 | Is MSL an adoptable standard? | 87% adoption, 21% emergence | Validated |
-| H3 | Is the economic gain real? | 6× faster end-to-end, 10% less memory | Validated |
+| H1 | Do packets carry meaning? | 93.7% code accuracy (native LLM) | Test set split 80/20; trivial baseline not yet computed |
+| H2 | Is MSL an adoptable standard? | 87% packet agreement, 43% same NN | New encoder is Linear(384,384) on same embeddings, not a truly independent model |
+| H3 | Is the economic gain real? | 3.7× faster end-to-end (real text) | Text baseline untrained (timing only); decoder cost included |
+
+Note: earlier synthetic-world results showed 6× speedup and 100% round-trip (deterministic codec). Real-text results are more modest and have known limitations (see `docs/15_phase_a_complete.md`).
 
 ## How it works
 
@@ -86,18 +88,18 @@ python -u -m msl.train.train_text_decoder --steps 20000 --lr 3e-5
 
 ## Tech stack
 
-- Python 3.11, PyTorch 2.13
-- Transformers (GPT-2, all-MiniLM-L6-v2)
+- Python 3.11+, PyTorch 2.5+
+- Transformers (GPT-2, all-MiniLM-L6-v2, BGE-M3)
 - Device: MPS (Apple Silicon) or CUDA (NVIDIA)
-- Tests: pytest, ruff, mypy — all green
+- Tests: pytest, ruff, mypy — 22 tests covering core modules (ms1, quantizer, codec, encoder); train/eval scripts have 0% coverage
 
 ## Documentation
 
 Read the docs in order:
 1. `docs/01_audit_critique.md` — scientific audit and 5 hypotheses
 2. `docs/03_mvp.md` — MVP specification
-3. `docs/07_verdict_economique.md` — 6× speedup validated
-4. `docs/12_h2_standard_adoptable.md` — MSL is an adoptable standard
+3. `docs/14_plan_developpement.md` — sequential development plan
+4. `docs/15_phase_a_complete.md` — Phase A results on real text (with limitations)
 
 ## License
 

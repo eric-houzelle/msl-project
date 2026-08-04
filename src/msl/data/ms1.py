@@ -234,7 +234,7 @@ def solve(task: Task, state: State) -> Any:
         domain = ATTRIBUTE_DOMAINS[key]
         # New value: pick a value different from current when possible.
         cur = state.attribute_value(eid, key)
-        new = domain[(hash((p["action"],)) % len(domain))]
+        new = domain[(ACTIONS.index(p["action"]) % len(domain))]
         if cur is not None and new == cur and len(domain) > 1:
             new = domain[(domain.index(cur) + 1) % len(domain)]
         return new

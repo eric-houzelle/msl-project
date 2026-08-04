@@ -120,12 +120,23 @@ class MSLDecoder(nn.Module):
 
 
 class TextDataset(Dataset):
-    """Dataset of (embedding, token_ids) pairs. Quantization happens in the training loop."""
+    """Dataset of (embedding, token_ids) pairs with train/test split."""
 
-    def __init__(self, corpus_path: str, tokenizer: GPT2Tokenizer, max_len: int = 48) -> None:
+    def __init__(self, corpus_path: str, tokenizer: GPT2Tokenizer, max_len: int = 48,
+                 split: str = "train", train_ratio: float = 0.8) -> None:
         corpus = torch.load(corpus_path, weights_only=False)
-        self.sentences = corpus["sentences"]
-        self.embeddings = corpus["embeddings"]
+        sentences = corpus["sentences"]
+        embeddings = corpus["embeddings"]
+        n_total = len(sentences)
+        n_train = int(n_total * train_ratio)
+
+        if split == "train":
+            self.sentences = sentences[:n_train]
+            self.embeddings = embeddings[:n_train]
+        else:
+            self.sentences = sentences[n_train:]
+            self.embeddings = embeddings[n_train:]
+
         self.tokenizer = tokenizer
         self.max_len = max_len
 
@@ -189,8 +200,10 @@ def main():
     quantizer.train()
     print(f"quantizer: {n_codebooks} codebooks x {codebook_size} ({n_codebooks*8} bits)")
 
-    # Dataset.
-    ds = TextDataset(args.corpus, tok, max_len=48)
+    # Dataset (train/test split).
+    ds = TextDataset(args.corpus, tok, max_len=48, split="train")
+    test_ds = TextDataset(args.corpus, tok, max_len=48, split="test")
+    print(f"train: {len(ds)} sentences, test: {len(test_ds)} sentences")
     loader = DataLoader(ds, batch_size=16, shuffle=True, num_workers=0,
                        collate_fn=lambda b: {
                            "embedding": torch.stack([x["embedding"] for x in b]),
@@ -219,7 +232,7 @@ def main():
             opt.zero_grad()
             out = decoder(z_q, token_ids)
             out["loss"].backward()
-            torch.nn.utils.clip_grad_norm_(decoder.proj.parameters(), 1.0)
+            torch.nn.utils.clip_grad_norm_([p for p in decoder.parameters() if p.requires_grad], 1.0)
             opt.step()
             running_loss += out["loss"].item()
             running_n += 1
@@ -230,13 +243,13 @@ def main():
                 running_loss, running_n = 0.0, 0
     print(f"done in {time.time()-t0:.1f}s")
 
-    # Test: generate from QUANTIZED embeddings (real MSL packets).
-    print("\n=== GENERATION TEST (with quantization) ===")
+    # Test: generate from QUANTIZED embeddings on HELD-OUT test set.
+    print("\n=== GENERATION TEST (held-out, with quantization) ===")
     decoder.eval()
     quantizer.eval()
-    test_sentences = ds.sentences[:5]
+    test_sentences = test_ds.sentences[:5]
     for i, s in enumerate(test_sentences):
-        emb = ds.embeddings[i:i+1].to(device)
+        emb = test_ds.embeddings[i:i+1].to(device)
         with torch.no_grad():
             q_out = quantizer(emb)
             z_q = q_out.z_q  # quantized (discrete packets)
@@ -244,13 +257,6 @@ def main():
         print(f"\n--- Example {i+1} ---")
         print(f"  Original:  {s}")
         print(f"  Generated:  {generated[0]}")
-
-    # Also test with continuous (no quantization) for comparison.
-    print("\n=== GENERATION TEST (continuous, no quantization) ===")
-    for i, s in enumerate(test_sentences):
-        emb = ds.embeddings[i:i+1].to(device)
-        generated = decoder.generate(emb, tok, max_len=40)
-        print(f"  {s[:50]} -> {generated[0][:50]}")
 
     out_dir = Path("runs")
     torch.save({

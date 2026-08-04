@@ -25,7 +25,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from msl.models.quantizer import PQQuantizer
-from msl.utils.seeding import seed_everything
+from msl.utils.seeding import default_device, seed_everything
 
 
 class SemanticQuantizer(nn.Module):
@@ -68,7 +68,7 @@ class SemanticQuantizer(nn.Module):
 
 def main():
     seed_everything(0)
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    device = default_device()
     print(f"device: {device}")
 
     # Load corpus

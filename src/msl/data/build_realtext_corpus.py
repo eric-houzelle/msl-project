@@ -22,7 +22,7 @@ import torch
 from transformers import AutoModel, AutoTokenizer
 
 from msl.models.quantizer import PQQuantizer
-from msl.utils.seeding import seed_everything
+from msl.utils.seeding import default_device, seed_everything
 
 
 def load_tatoeba(max_sentences: int = 10000, min_len: int = 20, max_len: int = 120):
@@ -47,7 +47,7 @@ def load_tatoeba(max_sentences: int = 10000, min_len: int = 20, max_len: int = 1
 
 def main():
     seed_everything(0)
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    device = default_device()
 
     # 1. Load sentences
     print("loading Tatoeba sentences...")
