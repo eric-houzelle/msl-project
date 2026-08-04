@@ -186,32 +186,44 @@ def main():
     text_step_ms = time_fn(text_lm_step, n=20, device=device)
     print(f"4. Text LM (per step):   {text_step_ms:.1f} ms")
 
-    # 5. Decoder: GPT-2 generates text from packets (the return path).
+    # 5. Decoder: GPT-2 generates text from packets (per TOKEN, not per sentence).
     from msl.train.train_text_decoder import MSLDecoder
     decoder = MSLDecoder(d_z=emb_dim, n_prefix=4).to(device)
     decoder.load_state_dict(dec_ckpt["decoder"])
     decoder.eval()
     z_q_sample = quant_step().z_q[:1]  # (1, emb_dim)
-    def decode_step():
-        with torch.no_grad():
-            return decoder.generate(z_q_sample, gpt2_tok, max_len=10)
 
-    # Warmup (first call is slow).
-    decode_step()
-    decode_ms = time_fn(decode_step, n=10, device=device)
-    print(f"5. Decoder (GPT-2):      {decode_ms:.1f} ms (per sentence)")
+    # Measure the average number of generated tokens per sentence.
+    _gen = decoder.generate(z_q_sample, gpt2_tok, max_len=50)
+    n_gen_tokens = len(gpt2_tok.encode(_gen[0])) if _gen else 10
+    avg_gen_tokens = max(1, n_gen_tokens)
+    print(f"5. Decoder average output: {avg_gen_tokens} tokens per sentence")
 
-    # --- End-to-end comparison ---
-    # MSL: encode + quantize (once) + LLM (avg_packets steps) + decode (per sentence)
-    msl_pipeline_ms = enc_ms + quant_ms + msl_step_ms * avg_packets + decode_ms * batch_size
-    # Text: LLM (avg_tokens steps per sentence × batch_size)
+    # Measure the cost per GENERATED TOKEN (not per sentence).
+    # GPT-2 autoregressive decoder makes 1 forward pass per token.
+    decode_times = []
+    with torch.no_grad():
+        for _ in range(5):
+            t0 = time.time()
+            _ = decoder.generate(z_q_sample, gpt2_tok, max_len=avg_gen_tokens)
+            t1 = time.time()
+            decode_times.append((t1 - t0) * 1000)  # ms for avg_gen_tokens tokens
+    decode_ms_per_sentence = np.mean(decode_times)
+    decode_ms_per_token = decode_ms_per_sentence / avg_gen_tokens
+    print(f"   GPT-2 per token:      {decode_ms_per_token:.1f} ms")
+    print(f"   GPT-2 per sentence:   {decode_ms_per_sentence:.1f} ms ({avg_gen_tokens} tokens)")
+
+    # --- End-to-end comparison (HONEST: count all autoregressive steps) ---
+    # MSL pipeline = encode + quantize + LLM steps (per packet) + decode steps (per generated token)
+    msl_pipeline_ms = enc_ms + quant_ms + msl_step_ms * avg_packets + decode_ms_per_token * avg_gen_tokens
+    # Text pipeline = text LM steps (per token) × sentences
     text_pipeline_ms = text_step_ms * avg_tokens * batch_size
 
     print(f"\n{'='*60}")
     print(f"END-TO-END COMPARISON (batch={batch_size}, {avg_tokens:.1f} tokens/sentence)")
     print(f"{'='*60}")
-    print(f"MSL pipeline:  {enc_ms:.0f} + {quant_ms:.0f} + {msl_step_ms*avg_packets:.0f} + {decode_ms*batch_size:.0f} = {msl_pipeline_ms:.0f} ms")
-    print(f"  (encode + quantize + {avg_packets:.0f} LLM steps + decode)")
+    print(f"MSL pipeline:  {enc_ms:.0f} + {quant_ms:.0f} + {msl_step_ms*avg_packets:.0f} + {decode_ms_per_token*avg_gen_tokens:.0f} = {msl_pipeline_ms:.0f} ms")
+    print(f"  (encode + quantize + {avg_packets:.0f} LLM steps + {avg_gen_tokens:.0f} decode steps)")
     print(f"Text pipeline: {text_step_ms:.0f} x {avg_tokens:.1f} x {batch_size} = {text_pipeline_ms:.0f} ms")
     print(f"  ({avg_tokens:.1f} text LM steps x {batch_size} sentences)")
     ratio = text_pipeline_ms / max(msl_pipeline_ms, 1)
